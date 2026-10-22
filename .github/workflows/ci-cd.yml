@@ -1,0 +1,137 @@
+name: TaskFlow CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: Deploy the published images to Kubernetes using a self-hosted runner
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: frontend
+            path: frontend
+            build: npm run build
+          - name: user-service
+            path: services/user-service
+            build: npm test --if-present
+          - name: task-service
+            path: services/task-service
+            build: npm test --if-present
+          - name: stats-service
+            path: services/stats-service
+            build: npm test --if-present
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.path }}
+        run: npm ci --ignore-scripts
+
+      - name: Run validation
+        working-directory: ${{ matrix.path }}
+        run: ${{ matrix.build }}
+
+  publish-images:
+    name: Publish image (${{ matrix.name }})
+    needs: validate
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: frontend
+            path: frontend
+          - name: user-service
+            path: services/user-service
+          - name: task-service
+            path: services/task-service
+          - name: stats-service
+            path: services/stats-service
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.path }}
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/taskflow-${{ matrix.name }}:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/taskflow-${{ matrix.name }}:latest
+
+  deploy:
+    name: Deploy to Kubernetes
+    needs: publish-images
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy == true
+    runs-on: self-hosted
+    environment: production
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify Kubernetes access
+        shell: pwsh
+        run: |
+          kubectl config current-context
+          kubectl get nodes
+
+      - name: Apply application manifests
+        shell: pwsh
+        run: kubectl apply -f k8s/
+
+      - name: Update application images
+        shell: pwsh
+        run: |
+          kubectl set image deployment/frontend frontend=${{ secrets.DOCKERHUB_USERNAME }}/taskflow-frontend:${{ github.sha }} -n taskflow
+          kubectl set image deployment/user-service user-service=${{ secrets.DOCKERHUB_USERNAME }}/taskflow-user-service:${{ github.sha }} -n taskflow
+          kubectl set image deployment/task-service task-service=${{ secrets.DOCKERHUB_USERNAME }}/taskflow-task-service:${{ github.sha }} -n taskflow
+          kubectl set image deployment/stats-service stats-service=${{ secrets.DOCKERHUB_USERNAME }}/taskflow-stats-service:${{ github.sha }} -n taskflow
+
+      - name: Wait for rollout
+        shell: pwsh
+        run: |
+          kubectl rollout status deployment/frontend -n taskflow --timeout=180s
+          kubectl rollout status deployment/user-service -n taskflow --timeout=180s
+          kubectl rollout status deployment/task-service -n taskflow --timeout=180s
+          kubectl rollout status deployment/stats-service -n taskflow --timeout=180s
+
+      - name: Run deployment health checks
+        shell: pwsh
+        run: |
+          kubectl get deployments,pods,services -n taskflow
+          kubectl exec -n taskflow deployment/user-service -- wget -qO- http://localhost:4001/health
+          kubectl exec -n taskflow deployment/task-service -- wget -qO- http://localhost:4002/health
+          kubectl exec -n taskflow deployment/stats-service -- wget -qO- http://localhost:4003/health

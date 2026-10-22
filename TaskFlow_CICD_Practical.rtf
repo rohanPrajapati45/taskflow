@@ -1,0 +1,164 @@
+{\rtf1\ansi\deff0
+{\fonttbl{\f0 Calibri;}{\f1 Consolas;}}
+\paperw11907\paperh16840\margl1440\margr1440\margt1080\margb1080
+\fs24
+\pard\qc\b\fs36 TaskFlow Microservice Application\par
+\fs30 Continuous Integration and Continuous Deployment Practical\par
+\b0\fs22\par
+\pard\ql
+\b Student:\b0 ______________________________\par
+\b Date:\b0 ______________________________\par
+\par
+\b 1. Aim\b0\par
+Implement a CI/CD pipeline using GitHub, GitHub Actions, Docker, Docker Hub, and Kubernetes for the TaskFlow cloud-native application.\par
+\par
+\b 2. CI/CD Concept\b0\par
+Continuous Integration automatically validates code whenever it is pushed or a pull request is opened. Continuous Deployment builds and publishes container images, then deploys a selected version to Kubernetes.\par
+\par
+\b 3. Pipeline Flow\b0\par
+\f1 GitHub push -> validation -> Docker image build -> Docker Hub push -> Kubernetes deployment -> health checks\par
+\f0\par
+\b 4. Required GitHub Secrets\b0\par
+The GitHub repository must contain these Actions secrets:\par
+\f1 DOCKERHUB_USERNAME\par
+DOCKERHUB_TOKEN\par
+\f0\par
+Never place the Docker Hub token in source code or workflow output.\par
+\par
+\b 5. Workflow File\b0\par
+The workflow is stored at:\par
+\f1 .github/workflows/ci-cd.yml\par
+\f0\par
+It contains three jobs:\par
+\tab validate\par
+\tab publish-images\par
+\tab deploy\par
+\par
+\b 6. Validate Job\b0\par
+The validate job runs on GitHub-hosted Ubuntu and checks all four application packages:\par
+\f1 frontend\par
+services/user-service\par
+services/task-service\par
+services/stats-service\par
+\f0\par
+It installs dependencies with:\par
+\f1 npm ci --ignore-scripts\par
+\f0\par
+The frontend runs:\par
+\f1 npm run build\par
+\f0\par
+Backend test commands are executed when test scripts are available:\par
+\f1 npm test --if-present\par
+\f0\par
+\b 7. Publish Images Job\b0\par
+The publish job runs after validation succeeds. It logs in to Docker Hub using GitHub Secrets and builds four images:\par
+\f1 <username>/taskflow-frontend\par
+<username>/taskflow-user-service\par
+<username>/taskflow-task-service\par
+<username>/taskflow-stats-service\par
+\f0\par
+Each image receives two tags:\par
+\f1 <commit-sha>\par
+latest\par
+\f0\par
+The commit tag provides an immutable release version. The latest tag identifies the most recent main-branch build.\par
+\par
+\b 8. Kubernetes Deploy Job\b0\par
+The deployment job is manual and uses a \f1 self-hosted\f0 GitHub Actions runner. A GitHub-hosted runner cannot directly access a local Docker Desktop Kubernetes cluster.\par
+\par
+The self-hosted runner must have:\par
+\tab Docker\par
+\tab kubectl\par
+\tab Docker Desktop Kubernetes enabled\par
+\tab Access to the taskflow namespace\par
+\par
+The deployment job performs:\par
+\f1 kubectl apply -f k8s/\par
+kubectl set image deployment/frontend ...\par
+kubectl set image deployment/user-service ...\par
+kubectl set image deployment/task-service ...\par
+kubectl set image deployment/stats-service ...\par
+kubectl rollout status ...\par
+kubectl exec ... /health\par
+\f0\par
+\b 9. Publish the Workflow\b0\par
+From the project root:\par
+\f1 git add .github/workflows/ci-cd.yml\par
+git add TaskFlow_CICD_Practical.rtf\par
+git commit -m "Add CI/CD pipeline"\par
+git push origin main\par
+\f0\par
+\b 10. Run CI/CD\b0\par
+Open the GitHub repository:\par
+\f1 Actions -> TaskFlow CI/CD\par
+\f0\par
+For a normal push, the validate and publish jobs run automatically.\par
+\par
+For a manual run:\par
+\tab Select \f1 Run workflow\f0 .\par
+\tab Select the \f1 main\f0 branch.\par
+\tab Set \f1 deploy\f0 to \f1 true\f0 only when a self-hosted runner is configured.\par
+\tab Start the workflow.\par
+\par
+Take Screenshot 1: CI/CD workflow run.\par
+\par
+\b 11. Validation Screenshots\b0\par
+Take Screenshot 2: Successful validation matrix.\par
+Take Screenshot 3: Frontend production build.\par
+\par
+\b 12. Docker Hub Screenshots\b0\par
+Open Docker Hub and verify that the four repositories contain new images:\par
+\f1 taskflow-frontend\par
+taskflow-user-service\par
+taskflow-task-service\par
+taskflow-stats-service\par
+\f0\par
+Take Screenshot 4: Docker Hub repositories and image tags.\par
+\par
+\b 13. Kubernetes Deployment Verification\b0\par
+Run locally or from the self-hosted runner:\par
+\f1 kubectl config current-context\par
+kubectl get nodes\par
+kubectl get deployments,pods,services -n taskflow\par
+\f0\par
+Expected backend state:\par
+\f1 user-service: 3/3\par
+task-service: 3/3\par
+stats-service: 3/3\par
+frontend: 1/1\par
+\f0\par
+Take Screenshot 5: Kubernetes rollout and Pods.\par
+\par
+\b 14. Health Check Verification\b0\par
+\f1 kubectl exec -n taskflow deployment/user-service -- wget -qO- http://localhost:4001/health\par
+kubectl exec -n taskflow deployment/task-service -- wget -qO- http://localhost:4002/health\par
+kubectl exec -n taskflow deployment/stats-service -- wget -qO- http://localhost:4003/health\par
+\f0\par
+Take Screenshot 6: Successful post-deployment health checks.\par
+\par
+\b 15. Rollback\b0\par
+View rollout history:\par
+\f1 kubectl rollout history deployment/task-service -n taskflow\par
+\f0\par
+Rollback the last release:\par
+\f1 kubectl rollout undo deployment/task-service -n taskflow\par
+kubectl rollout status deployment/task-service -n taskflow\par
+\f0\par
+Take Screenshot 7: Rollback completed successfully.\par
+\par
+\b 16. Deployment Strategies\b0\par
+The current pipeline uses a rolling update. Kubernetes gradually replaces old Pods with new Pods and keeps the Service available when readiness probes pass.\par
+\par
+\b 17. Troubleshooting\b0\par
+\tab Docker login failure: check \f1 DOCKERHUB_USERNAME\f0 and \f1 DOCKERHUB_TOKEN\f0 .\par
+\tab ImagePullBackOff: verify that the Docker Hub repositories are public or configure image pull credentials.\par
+\tab Self-hosted runner unavailable: verify the runner is online and has the \f1 self-hosted\f0 label.\par
+\tab Kubernetes context failure: run \f1 kubectl config current-context\f0 on the runner.\par
+\tab Failed health check: inspect \f1 kubectl logs\f0 and \f1 kubectl describe pod\f0 .\par
+\par
+\b 18. Result\b0\par
+The CI/CD workflow validates the application, builds four Docker images, publishes immutable and latest tags to Docker Hub, and provides a controlled manual deployment stage for Kubernetes. Rollout status and health checks verify the deployment.\par
+\par
+\b 19. Conclusion\b0\par
+CI/CD automates the path from a GitHub commit to a tested Docker image and a Kubernetes release. It improves repeatability, reduces manual errors, and supports rollback when a deployment is unsuccessful.\par
+}
