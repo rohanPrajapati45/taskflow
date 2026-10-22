@@ -1,0 +1,1 @@
+TaskFlow is a small microservices task-management app (user-service, task-service, stats-service, MongoDB, React frontend) built as a base for Kubernetes labs covering deployment, service discovery, ConfigMaps/Secrets, and monitoring.

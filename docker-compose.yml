@@ -1,0 +1,78 @@
+services:
+  mongodb:
+    image: mongo:7
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: adminpass
+    networks:
+      - taskflow-net
+
+  user-service:
+    build: ./services/user-service
+    ports:
+      - "4001:4001"
+    environment:
+      PORT: 4001
+      NODE_ENV: development
+      LOG_LEVEL: info
+      MONGO_HOST: mongodb
+      MONGO_PORT: 27017
+      MONGO_DB_NAME: taskflow
+      MONGO_USERNAME: admin
+      MONGO_PASSWORD: adminpass
+    depends_on:
+      - mongodb
+    networks:
+      - taskflow-net
+
+  task-service:
+    build: ./services/task-service
+    ports:
+      - "4002:4002"
+    environment:
+      PORT: 4002
+      NODE_ENV: development
+      LOG_LEVEL: info
+      MONGO_HOST: mongodb
+      MONGO_PORT: 27017
+      MONGO_DB_NAME: taskflow
+      MONGO_USERNAME: admin
+      MONGO_PASSWORD: adminpass
+      USER_SERVICE_URL: http://user-service:4001
+    depends_on:
+      - user-service
+      - mongodb
+    networks:
+      - taskflow-net
+
+  stats-service:
+    build: ./services/stats-service
+    ports:
+      - "4003:4003"
+    environment:
+      PORT: 4003
+      NODE_ENV: development
+      LOG_LEVEL: info
+      USER_SERVICE_URL: http://user-service:4001
+      TASK_SERVICE_URL: http://task-service:4002
+    depends_on:
+      - user-service
+      - task-service
+    networks:
+      - taskflow-net
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - stats-service
+    networks:
+      - taskflow-net
+
+networks:
+  taskflow-net:
+    driver: bridge

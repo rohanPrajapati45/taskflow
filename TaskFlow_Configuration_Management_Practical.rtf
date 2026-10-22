@@ -1,0 +1,243 @@
+{\rtf1\ansi\deff0
+{\fonttbl{\f0 Calibri;}{\f1 Consolas;}}
+\paperw11907\paperh16840\margl1440\margr1440\margt1080\margb1080
+\fs24
+\pard\qc\b\fs36 TaskFlow Microservice Application\par
+\fs30 Configuration Management Using ConfigMaps and Secrets\par
+\b0\fs22\par
+\pard\ql
+\b Student:\b0 ______________________________\par
+\b Date:\b0 ______________________________\par
+\par
+\b 1. Aim\b0\par
+Implement configuration management in Kubernetes using ConfigMaps and Secrets, then deploy a containerized application that consumes both non-sensitive and sensitive configuration data.\par
+\par
+\b 2. Application Components\b0\par
+The practical uses the existing TaskFlow application:\par
+\tab MongoDB\par
+\tab user-service\par
+\tab task-service\par
+\tab stats-service\par
+\tab frontend\par
+\par
+\b 3. Basic Concepts\b0\par
+\b ConfigMap:\b0 Stores non-sensitive configuration such as environment names, ports, database hostnames, and internal Service URLs.\par
+\b Secret:\b0 Stores sensitive configuration such as database usernames and passwords. Kubernetes stores Secret data encoded and does not display values through normal describe commands.\par
+\b Environment Injection:\b0 Deployments consume ConfigMap and Secret values as environment variables inside containers.\par
+\b Service Discovery:\b0 Kubernetes Service names such as \f1 mongodb\f0 and \f1 user-service\f0 are used instead of localhost or changing Pod IP addresses.\par
+\par
+\b 4. Project Files\b0\par
+The configuration manifests are stored in the \f1 k8s\f0 directory:\par
+\f1 01-secret.yaml\par
+02-configmap.yaml\par
+03-mongodb.yaml\par
+04-user-service.yaml\par
+05-task-service.yaml\par
+06-stats-service.yaml\par
+\f0\par
+\b 5. Kubernetes Prerequisites\b0\par
+Open PowerShell in the project root and verify Kubernetes:\par
+\f1 cd "C:\\Users\\ROHAN PRAJAPATI\\Desktop\\sem7\\cloud native and devops\\lab\\microservice_app\\taskflow"\par
+kubectl config current-context\par
+kubectl get nodes\par
+\f0\par
+Expected context: \f1 docker-desktop\f0 . Expected node status: \f1 Ready\f0 .\par
+\par
+Select the application namespace:\par
+\f1 kubectl config set-context --current --namespace=taskflow\par
+\f0\par
+\b 6. Create the Secret\b0\par
+The Secret contains MongoDB credentials. The file \f1 k8s/01-secret.yaml\f0 contains:\par
+\f1 apiVersion: v1\par
+kind: Secret\par
+metadata:\par
+  name: taskflow-secrets\par
+  namespace: taskflow\par
+type: Opaque\par
+stringData:\par
+  MONGO_USERNAME: admin\par
+  MONGO_PASSWORD: adminpass\par
+\f0\par
+Apply the Secret:\par
+\f1 kubectl apply -f k8s/01-secret.yaml\par
+\f0\par
+For a real production system, do not commit plaintext credentials to Git. Use an external secret manager or sealed secrets.\par
+\par
+\b 7. Create the ConfigMap\b0\par
+The ConfigMap contains non-sensitive settings:\par
+\f1 apiVersion: v1\par
+kind: ConfigMap\par
+metadata:\par
+  name: taskflow-config\par
+  namespace: taskflow\par
+data:\par
+  NODE_ENV: production\par
+  LOG_LEVEL: info\par
+  MONGO_HOST: mongodb\par
+  MONGO_PORT: "27017"\par
+  MONGO_DB_NAME: taskflow\par
+  USER_SERVICE_URL: http://user-service:4001\par
+  TASK_SERVICE_URL: http://task-service:4002\par
+\f0\par
+Apply the ConfigMap:\par
+\f1 kubectl apply -f k8s/02-configmap.yaml\par
+\f0\par
+\b 8. Configure MongoDB\b0\par
+MongoDB consumes the Secret using \f1 secretKeyRef\f0 :\par
+\f1 MONGO_INITDB_ROOT_USERNAME -> MONGO_USERNAME\par
+MONGO_INITDB_ROOT_PASSWORD -> MONGO_PASSWORD\par
+\f0\par
+Deploy MongoDB:\par
+\f1 kubectl apply -f k8s/03-mongodb.yaml\par
+\f0\par
+\b 9. Configure the User Service\b0\par
+The user-service Deployment consumes the ConfigMap with:\par
+\f1 envFrom:\par
+  - configMapRef:\par
+      name: taskflow-config\par
+\f0\par
+It consumes sensitive credentials with:\par
+\f1 env:\par
+  - name: MONGO_USERNAME\par
+    valueFrom:\par
+      secretKeyRef:\par
+        name: taskflow-secrets\par
+        key: MONGO_USERNAME\par
+  - name: MONGO_PASSWORD\par
+    valueFrom:\par
+      secretKeyRef:\par
+        name: taskflow-secrets\par
+        key: MONGO_PASSWORD\par
+\f0\par
+Apply the Deployment:\par
+\f1 kubectl apply -f k8s/04-user-service.yaml\par
+\f0\par
+\b 10. Configure the Task Service\b0\par
+The task-service uses the same ConfigMap and Secret references. It also receives the internal user-service URL from the ConfigMap.\par
+\f1 kubectl apply -f k8s/05-task-service.yaml\par
+\f0\par
+\b 11. Configure the Stats Service\b0\par
+The stats-service consumes non-sensitive Service URLs from the ConfigMap:\par
+\f1 USER_SERVICE_URL=http://user-service:4001\par
+TASK_SERVICE_URL=http://task-service:4002\par
+\f0\par
+Apply the Deployment:\par
+\f1 kubectl apply -f k8s/06-stats-service.yaml\par
+\f0\par
+\b 12. Complete Configuration Deployment\b0\par
+All configuration and application manifests can be applied together:\par
+\f1 kubectl apply -f k8s/01-secret.yaml\par
+kubectl apply -f k8s/02-configmap.yaml\par
+kubectl apply -f k8s/03-mongodb.yaml\par
+kubectl apply -f k8s/04-user-service.yaml\par
+kubectl apply -f k8s/05-task-service.yaml\par
+kubectl apply -f k8s/06-stats-service.yaml\par
+\f0\par
+Restart consumers after changing configuration values:\par
+\f1 kubectl rollout restart deployment/user-service deployment/task-service deployment/stats-service -n taskflow\par
+kubectl rollout status deployment/user-service -n taskflow --timeout=120s\par
+kubectl rollout status deployment/task-service -n taskflow --timeout=120s\par
+kubectl rollout status deployment/stats-service -n taskflow --timeout=120s\par
+\f0\par
+\b 13. Verify ConfigMap\b0\par
+Display non-sensitive configuration:\par
+\f1 kubectl describe configmap taskflow-config -n taskflow\par
+\f0\par
+Expected values include:\par
+\f1 NODE_ENV: production\par
+MONGO_HOST: mongodb\par
+MONGO_DB_NAME: taskflow\par
+USER_SERVICE_URL: http://user-service:4001\par
+TASK_SERVICE_URL: http://task-service:4002\par
+\f0\par
+Take Screenshot 1: ConfigMap data.\par
+\par
+\b 14. Verify Secret Safely\b0\par
+Display Secret key names and byte counts without displaying values:\par
+\f1 kubectl describe secret taskflow-secrets -n taskflow\par
+\f0\par
+Expected keys:\par
+\f1 MONGO_USERNAME\par
+MONGO_PASSWORD\par
+\f0\par
+Take Screenshot 2: Secret key names and byte counts. Never include actual password values in a screenshot or report.\par
+\par
+\b 15. Verify Application Consumption\b0\par
+Display non-sensitive environment variables inside user-service and confirm the password exists without printing it:\par
+\f1 kubectl exec -n taskflow deployment/user-service -- sh -c 'echo NODE_ENV=$NODE_ENV; echo MONGO_HOST=$MONGO_HOST; echo MONGO_DB_NAME=$MONGO_DB_NAME; echo USER_SERVICE_URL=$USER_SERVICE_URL; test -n "$MONGO_PASSWORD" && echo MONGO_PASSWORD=SET'\par
+\f0\par
+Verify the task-service also receives the Secret:\par
+\f1 kubectl exec -n taskflow deployment/task-service -- sh -c 'echo MONGO_HOST=$MONGO_HOST; test -n "$MONGO_PASSWORD" && echo MONGO_PASSWORD=SET'\par
+\f0\par
+Expected output includes:\par
+\f1 NODE_ENV=production\par
+MONGO_HOST=mongodb\par
+MONGO_DB_NAME=taskflow\par
+USER_SERVICE_URL=http://user-service:4001\par
+MONGO_PASSWORD=SET\par
+\f0\par
+Take Screenshot 3: Application consuming ConfigMap and Secret values.\par
+\par
+\b 16. Verify Service Health\b0\par
+\f1 kubectl exec -n taskflow deployment/user-service -- wget -qO- http://localhost:4001/health\par
+kubectl exec -n taskflow deployment/task-service -- wget -qO- http://localhost:4002/health\par
+kubectl exec -n taskflow deployment/stats-service -- wget -qO- http://localhost:4003/health\par
+\f0\par
+Expected response contains:\par
+\f1 {"status":"ok"}\par
+\f0\par
+Take Screenshot 4: Healthy configuration-consuming services.\par
+\par
+\b 17. Verify Pods and Deployments\b0\par
+\f1 kubectl get deployments -n taskflow\par
+kubectl get pods -n taskflow\par
+\f0\par
+Expected result:\par
+\f1 user-service: 3/3 Ready\par
+task-service: 3/3 Ready\par
+stats-service: 3/3 Ready\par
+mongodb: 1/1 Ready\par
+\f0\par
+Take Screenshot 5: Running Deployments and Pods.\par
+\par
+\b 18. Configuration Update Test\b0\par
+Edit a non-sensitive value in \f1 k8s/02-configmap.yaml\f0 , apply it, and restart the consumers:\par
+\f1 kubectl apply -f k8s/02-configmap.yaml\par
+kubectl rollout restart deployment/user-service deployment/task-service deployment/stats-service -n taskflow\par
+kubectl rollout status deployment/user-service -n taskflow --timeout=120s\par
+\f0\par
+This demonstrates that updated configuration is loaded when new containers start.\par
+\par
+\b 19. Troubleshooting\b0\par
+Check logs:\par
+\f1 kubectl logs -n taskflow deployment/user-service\par
+kubectl logs -n taskflow deployment/task-service\par
+kubectl logs -n taskflow deployment/stats-service\par
+\f0\par
+Describe a failed Pod:\par
+\f1 kubectl describe pod -n taskflow <pod-name>\par
+kubectl get events -n taskflow --sort-by=.lastTimestamp\par
+\f0\par
+Common errors:\par
+\tab \f1 CreateContainerConfigError\f0 : check Secret or ConfigMap names and keys.\par
+\tab \f1 CrashLoopBackOff\f0 : check MongoDB credentials and application logs.\par
+\tab Missing configuration: restart the Deployment after changing a ConfigMap or Secret.\par
+\par
+\b 20. Cleanup\b0\par
+Delete the practical resources:\par
+\f1 kubectl delete -f k8s/06-stats-service.yaml\par
+kubectl delete -f k8s/05-task-service.yaml\par
+kubectl delete -f k8s/04-user-service.yaml\par
+kubectl delete -f k8s/03-mongodb.yaml\par
+kubectl delete -f k8s/02-configmap.yaml\par
+kubectl delete -f k8s/01-secret.yaml\par
+\f0\par
+Or delete the complete namespace:\par
+\f1 kubectl delete namespace taskflow\par
+\f0\par
+\b 21. Result\b0\par
+The containerized TaskFlow application successfully consumed non-sensitive values from a Kubernetes ConfigMap and sensitive MongoDB credentials from a Kubernetes Secret. The Deployments started successfully, health checks returned \f1 status: ok\f0 , and the configuration was verified inside running containers without exposing the password.\par
+\par
+\b 22. Conclusion\b0\par
+Kubernetes ConfigMaps separate application configuration from container images, while Secrets protect sensitive values. Using \f1 configMapRef\f0 and \f1 secretKeyRef\f0 allows the same container images to run with environment-specific configuration without hardcoding settings in application code.\par
+}

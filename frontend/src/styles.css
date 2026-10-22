@@ -1,0 +1,124 @@
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color: #d9e2ec;
+  background: #080b10;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(circle at 78% 5%, rgba(0, 217, 255, 0.08), transparent 28rem),
+    linear-gradient(125deg, #080b10 0%, #0a0f15 55%, #080b10 100%);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a,
+select {
+  transition: color 160ms ease, border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #00d9ff;
+  outline-offset: 3px;
+}
+
+.font-display {
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.font-code {
+  font-family: 'Fira Code', monospace;
+}
+
+.glass-panel {
+  background: rgba(16, 21, 29, 0.84);
+  border: 1px solid #202a36;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
+}
+
+@layer components {
+  input,
+  select,
+  textarea {
+    @apply w-full border border-line bg-[#0b1016] px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-700;
+  }
+
+  input:focus,
+  select:focus,
+  textarea:focus {
+    @apply border-cyan outline-none;
+  }
+
+  .status-select {
+    @apply w-auto border px-2 py-1 text-xs font-medium;
+  }
+
+  .status-pending {
+    @apply border-amber-400/40 bg-amber-400/10 text-amber-300;
+  }
+
+  .status-in-progress {
+    @apply border-sky-400/40 bg-sky-400/10 text-sky-300;
+  }
+
+  .status-done {
+    @apply border-cyan/40 bg-cyan/10 text-cyan;
+  }
+}
+
+.grid-lines {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    display: block;
+  }
+
+  .sidebar {
+    position: relative;
+    width: 100%;
+    min-height: auto;
+    border-right: 0;
+    border-bottom: 1px solid #202a36;
+  }
+
+  .main-content {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 620px) {
+  .page-content {
+    padding: 1.25rem;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+  }
+}

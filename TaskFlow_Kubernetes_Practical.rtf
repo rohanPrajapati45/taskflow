@@ -1,0 +1,228 @@
+{\rtf1\ansi\deff0
+{\fonttbl{\f0 Calibri;}{\f1 Consolas;}}
+\paperw11907\paperh16840\margl1440\margr1440\margt1080\margb1080
+\fs24
+\pard\qc\b\fs36 TaskFlow Microservice Application\par
+\fs30 Kubernetes Deployment Practical\par
+\b0\fs22\par
+\pard\ql
+\b Student:\b0 ______________________________\par
+\b Date:\b0 ______________________________\par
+\par
+\b 1. Aim\b0\par
+Deploy the TaskFlow microservice application on Kubernetes after Docker containerization. Components: React frontend, user-service, task-service, stats-service, and MongoDB.\par
+\par
+\b 2. Ports\b0\par
+user-service: 4001\par
+task-service: 4002\par
+stats-service: 4003\par
+MongoDB: 27017\par
+frontend container: 80\par
+\par
+\b 3. Kubernetes Files\b0\par
+The following files are inside the project folder \f1 k8s\f0 :\par
+\f1 00-namespace.yaml\par
+01-secret.yaml\par
+02-configmap.yaml\par
+03-mongodb.yaml\par
+04-user-service.yaml\par
+05-task-service.yaml\par
+06-stats-service.yaml\par
+07-frontend.yaml\par
+\f0\par
+\b 4. Docker Compose Test\b0\par
+Open PowerShell in the project root:\par
+\f1 cd "C:\\Users\\ROHAN PRAJAPATI\\Desktop\\sem7\\cloud native and devops\\lab\\microservice_app\\taskflow"\par
+docker compose up --build\par
+docker compose ps\par
+\f0\par
+This confirms that the application works before Kubernetes deployment.\par
+\par
+\b 5. Kubernetes Check\b0\par
+\f1 docker --version\par
+kubectl version --client\par
+kubectl config current-context\par
+kubectl get nodes\par
+\f0\par
+Expected context: \f1 docker-desktop\f0 . Expected node status: \f1 Ready\f0 .\par
+\par
+\b 6. Namespace\b0\par
+\f1 kubectl apply -f k8s/00-namespace.yaml\par
+kubectl config set-context --current --namespace=taskflow\par
+\f0\par
+\b 7. Configuration\b0\par
+Apply credentials and application configuration:\par
+\f1 kubectl apply -f k8s/01-secret.yaml\par
+kubectl apply -f k8s/02-configmap.yaml\par
+\f0\par
+Kubernetes internal names:\par
+\f1 mongodb:27017\par
+http://user-service:4001\par
+http://task-service:4002\par
+http://stats-service:4003\par
+\f0\par
+\b 8. Build Images\b0\par
+\f1 docker build -t taskflow-user-service:latest ./services/user-service\par
+docker build -t taskflow-task-service:latest ./services/task-service\par
+docker build -t taskflow-stats-service:latest ./services/stats-service\par
+docker build -t taskflow-frontend:latest ./frontend\par
+docker images\par
+\f0\par
+\b 9. Frontend Routing\b0\par
+The frontend uses relative paths such as \f1 /api/users\f0 . Nginx proxies these paths to the Kubernetes Services. This avoids using \f1 localhost\f0 or browser-inaccessible Kubernetes DNS names.\par
+\par
+Rebuild the frontend after changing \f1 frontend/src/api.js\f0 and \f1 frontend/nginx.conf\f0 :\par
+\f1 cd frontend\par
+npm run build\par
+cd ..\par
+\f0\par
+\b 10. Validate Manifests\b0\par
+\f1 kubectl apply --dry-run=client -f k8s/\par
+\f0\par
+Expected result: all resources report \f1 created (dry run)\f0 .\par
+\par
+\b 11. Deploy MongoDB\b0\par
+MongoDB uses a PersistentVolumeClaim for storage:\par
+\f1 kubectl apply -f k8s/03-mongodb.yaml\par
+kubectl get pods -n taskflow\par
+kubectl get services -n taskflow\par
+\f0\par
+\b 12. Deploy Backend\b0\par
+\f1 kubectl apply -f k8s/04-user-service.yaml\par
+kubectl apply -f k8s/05-task-service.yaml\par
+kubectl apply -f k8s/06-stats-service.yaml\par
+\f0\par
+\b 13. Deploy Frontend\b0\par
+\f1 kubectl apply -f k8s/07-frontend.yaml\par
+\f0\par
+The frontend Service uses NodePort 30080.\par
+\par
+\b 14. Complete Deployment\b0\par
+All manifests can also be applied together:\par
+\f1 kubectl apply -f k8s/\par
+kubectl wait --for=condition=available deployment --all -n taskflow --timeout=180s\par
+\f0\par
+\b 15. Status Check\b0\par
+\f1 kubectl get all -n taskflow\par
+kubectl get pods -n taskflow -o wide\par
+kubectl get services -n taskflow\par
+\f0\par
+Expected pod status: \f1 1/1 Running\f0 . Expected frontend Service: \f1 80:30080/TCP\f0 .\par
+\par
+\b 16. Health Test\b0\par
+\f1 kubectl exec -n taskflow deployment/user-service -- wget -qO- http://localhost:4001/health\par
+kubectl exec -n taskflow deployment/task-service -- wget -qO- http://localhost:4002/health\par
+kubectl exec -n taskflow deployment/stats-service -- wget -qO- http://localhost:4003/health\par
+\f0\par
+Expected response contains \f1 {"status":"ok"}\f0 .\par
+\par
+\b 17. Service DNS Test\b0\par
+\f1 kubectl exec -n taskflow deployment/frontend -- wget -qO- http://user-service:4001/health\par
+kubectl exec -n taskflow deployment/frontend -- wget -qO- http://task-service:4002/health\par
+kubectl exec -n taskflow deployment/frontend -- wget -qO- http://stats-service:4003/health\par
+\f0\par
+\b 18. API Proxy Test\b0\par
+\f1 kubectl exec -n taskflow deployment/frontend -- wget -qO- http://127.0.0.1/api/users\par
+kubectl exec -n taskflow deployment/frontend -- wget -qO- http://127.0.0.1/api/tasks\par
+kubectl exec -n taskflow deployment/frontend -- wget -qO- http://127.0.0.1/api/stats/overview\par
+\f0\par
+Expected initial result: empty users and tasks lists, and zero statistics.\par
+\par
+\b 19. Open Application\b0\par
+Use port-forwarding because Docker Desktop did not expose NodePort directly on localhost:\par
+\f1 kubectl port-forward -n taskflow service/frontend 8080:80\par
+\f0\par
+Open in a browser: \f1 http://localhost:8080\f0 . Stop forwarding with \f1 Ctrl+C\f0 .\par
+\par
+\b 20. Logs\b0\par
+\f1 kubectl logs -n taskflow deployment/user-service\par
+kubectl logs -n taskflow deployment/task-service\par
+kubectl logs -n taskflow deployment/stats-service\par
+kubectl logs -n taskflow deployment/frontend\par
+kubectl logs -n taskflow deployment/mongodb\par
+kubectl describe pod -n taskflow <pod-name>\par
+kubectl get events -n taskflow --sort-by=.lastTimestamp\par
+\f0\par
+\b 21. Scaling\b0\par
+\f1 kubectl scale deployment user-service --replicas=3 -n taskflow\par
+kubectl scale deployment task-service --replicas=3 -n taskflow\par
+kubectl scale deployment stats-service --replicas=2 -n taskflow\par
+kubectl get pods -n taskflow\par
+\f0\par
+\b 22. Update and Rollback\b0\par
+\f1 docker build -t taskflow-task-service:1.1 ./services/task-service\par
+kubectl set image deployment/task-service task-service=taskflow-task-service:1.1 -n taskflow\par
+kubectl rollout status deployment/task-service -n taskflow\par
+kubectl rollout undo deployment/task-service -n taskflow\par
+\f0\par
+\b 23. Service Discovery\b0\par
+The backend Services already use the ClusterIP type. Kubernetes provides DNS names for these Services:\par
+\f1 user-service.taskflow.svc.cluster.local\par
+task-service.taskflow.svc.cluster.local\par
+stats-service.taskflow.svc.cluster.local\par
+mongodb.taskflow.svc.cluster.local\par
+\f0\par
+Short names can be used from Pods in the same namespace:\par
+\f1 user-service\par
+task-service\par
+stats-service\par
+mongodb\par
+\f0\par
+Check the Services and their endpoints:\par
+\f1 kubectl get services -n taskflow\par
+kubectl get endpoints -n taskflow\par
+\f0\par
+Test Kubernetes DNS resolution:\par
+\f1 kubectl run dns-test --rm -i --restart=Never --image=busybox:1.36 -- nslookup user-service.taskflow.svc.cluster.local\par
+\f0\par
+Test communication through Service DNS names:\par
+\f1 kubectl exec -n taskflow deployment/frontend -- wget -qO- http://user-service:4001/health\par
+kubectl exec -n taskflow deployment/frontend -- wget -qO- http://task-service:4002/health\par
+kubectl exec -n taskflow deployment/frontend -- wget -qO- http://stats-service:4003/health\par
+\f0\par
+\b 24. Load Balancing\b0\par
+The backend Deployments were configured with three replicas. The changes were made in:\par
+\f1 k8s/04-user-service.yaml\par
+k8s/05-task-service.yaml\par
+k8s/06-stats-service.yaml\par
+\f0\par
+The Deployment setting is:\par
+\f1 replicas: 3\par
+\f0\par
+Apply the updated Deployments:\par
+\f1 kubectl apply -f k8s/04-user-service.yaml\par
+kubectl apply -f k8s/05-task-service.yaml\par
+kubectl apply -f k8s/06-stats-service.yaml\par
+kubectl wait --for=condition=available deployment/user-service deployment/task-service deployment/stats-service -n taskflow --timeout=180s\par
+\f0\par
+Verify the three replicas and the Service endpoints:\par
+\f1 kubectl get pods -n taskflow -l "app in (user-service,task-service,stats-service)" -o wide\par
+kubectl get endpoints user-service task-service stats-service -n taskflow\par
+\f0\par
+Each Service displayed three Pod IP addresses. Kubernetes load-balances requests sent to the stable ClusterIP across the ready Pods selected by the Service labels.\par
+\par
+Generate repeated requests through the user-service Service:\par
+\f1 1..6 | ForEach-Object { kubectl exec -n taskflow deployment/frontend -- wget -qO- http://user-service:4001/health }\par
+\f0\par
+\b 25. Self-Healing Test\b0\par
+Delete one user-service Pod:\par
+\f1 kubectl delete pod <user-service-pod-name> -n taskflow --wait=false\par
+kubectl wait --for=condition=available deployment/user-service -n taskflow --timeout=120s\par
+kubectl get pods -n taskflow -l app=user-service -o wide\par
+kubectl get endpoints user-service -n taskflow\par
+\f0\par
+Kubernetes automatically created a replacement Pod, and the Service continued to expose three ready endpoints.\par
+\par
+\b 26. Discovery and Load Balancing Result\b0\par
+Service Discovery was verified using Kubernetes DNS. Load balancing was verified using three replicas per backend and three endpoint addresses per Service. Self-healing was verified by deleting one Pod and observing its automatic replacement.\par
+\par
+\b 27. Cleanup\b0\par
+\f1 kubectl delete -f k8s/\par
+kubectl delete namespace taskflow\par
+\f0\par
+\b 28. Result\b0\par
+The TaskFlow application was successfully containerized and deployed to Docker Desktop Kubernetes. MongoDB, all backend services, and the frontend reached the Running state. Health checks, Kubernetes DNS checks, API proxy checks, and frontend access through \f1 http://localhost:8080\f0 were successful.\par
+\par
+\b 29. Conclusion\b0\par
+This practical demonstrated Docker Compose, Docker images, Kubernetes Namespace, Secret, ConfigMap, PersistentVolumeClaim, Deployments, Services, health probes, service discovery, scaling, rollout, rollback, logging, and application verification.\par
+}
