@@ -1,0 +1,128 @@
+{\rtf1\ansi\deff0
+{\fonttbl{\f0 Calibri;}{\f1 Consolas;}}
+\paperw11907\paperh16840\margl1440\margr1440\margt1080\margb1080
+\fs24
+\pard\qc\b\fs36 TaskFlow Microservice Application\par
+\fs30 DevSecOps Security Pipeline Practical\par
+\b0\fs22\par
+\pard\ql
+\b Student:\b0 ______________________________\par
+\b Date:\b0 ______________________________\par
+\par
+\b 1. Aim\b0\par
+Implement a DevSecOps security pipeline using GitHub Actions and automated security scanning tools for the TaskFlow cloud-native application.\par
+\par
+\b 2. DevSecOps Concept\b0\par
+DevSecOps integrates security into the development and delivery process. Security checks run automatically when code is pushed or a pull request is opened. This detects problems before code is merged or deployed.\par
+\par
+\b 3. Security Checks\b0\par
+\tab Gitleaks scans the repository for accidentally committed secrets.\par
+\tab npm audit checks Node.js dependencies for known vulnerabilities.\par
+\tab CodeQL analyzes JavaScript source code for security problems.\par
+\tab Trivy scans Kubernetes manifests for unsafe configuration.\par
+\tab Trivy scans built Docker images for operating-system and package vulnerabilities.\par
+\par
+\b 4. Required Setup\b0\par
+The project is already pushed to GitHub at the repository configured in Git. Docker Hub credentials were added as GitHub repository secrets:\par
+\f1 DOCKERHUB_USERNAME\par
+DOCKERHUB_TOKEN\par
+\f0\par
+The security workflow does not print or expose either secret.\par
+\par
+\b 5. Workflow File\b0\par
+The workflow file is:\par
+\f1 .github/workflows/security.yml\par
+\f0\par
+The workflow starts for:\par
+\f1 push to main\par
+pull request to main\nmanual workflow_dispatch\par
+\f0\par
+\b 6. Security Pipeline Jobs\b0\par
+The workflow contains these jobs:\par
+\tab Secret scan\par
+\tab Dependency audit for frontend and all backend services\par
+\tab CodeQL JavaScript analysis\par
+\tab Kubernetes manifest scan\par
+\tab Docker image scan for frontend and all backend services\par
+\par
+\b 7. Local Git Verification\b0\par
+From the project root:\par
+\f1 git status\par
+git branch --show-current\par
+git remote -v\par
+git diff --check\par
+\f0\par
+Expected branch: \f1 main\f0 .\par
+\par
+\b 8. Publish the Workflow\b0\par
+The workflow file must be committed and pushed to GitHub:\par
+\f1 git add .github/workflows/security.yml\par
+git add TaskFlow_DevSecOps_Security_Practical.rtf\par
+git commit -m "Add DevSecOps security workflow"\par
+git push origin main\par
+\f0\par
+\b 9. Run the Workflow\b0\par
+Open the GitHub repository and select:\par
+\f1 Actions -> DevSecOps Security\par
+\f0\par
+The workflow can run automatically after the push. It can also be started manually using:\par
+\f1 Actions -> DevSecOps Security -> Run workflow\par
+\f0\par
+Take Screenshot 1: GitHub Actions workflow run.\par
+\par
+\b 10. Gitleaks Verification\b0\par
+Open the \f1 Secret scan\f0 job. A successful result means no credentials were detected in the repository history scanned by the workflow.\par
+Take Screenshot 2: Successful Gitleaks job.\par
+\par
+\b 11. Dependency Audit Verification\b0\par
+The matrix checks these package directories:\par
+\f1 frontend\par
+services/user-service\par
+services/task-service\par
+services/stats-service\par
+\f0\par
+Each job runs:\par
+\f1 npm install --ignore-scripts\par
+npm audit --audit-level=high\par
+\f0\par
+Audit JSON reports are uploaded as GitHub Actions artifacts. High-severity findings fail the job.\par
+Take Screenshot 3: Dependency audit jobs and uploaded report.\par
+\par
+\b 12. CodeQL Verification\b0\par
+CodeQL analyzes JavaScript source files and publishes findings in GitHub Code scanning.\par
+Open:\par
+\f1 Repository -> Security -> Code scanning\par
+\f0\par
+Take Screenshot 4: CodeQL result.\par
+\par
+\b 13. Kubernetes Scan Verification\b0\par
+Trivy scans the \f1 k8s\f0 directory for HIGH and CRITICAL configuration problems.\par
+The scan checks Kubernetes manifests such as Deployments, Services, Secrets, ConfigMaps, and observability resources.\par
+Take Screenshot 5: Successful Kubernetes Trivy scan.\par
+\par
+\b 14. Docker Image Scan Verification\b0\par
+The workflow builds each Docker image in GitHub Actions and scans it with Trivy. Images scanned:\par
+\f1 taskflow-frontend\par
+taskflow-user-service\par
+taskflow-task-service\par
+taskflow-stats-service\par
+\f0\par
+The security workflow scans images but does not push them to Docker Hub. Image publishing belongs to the later CI/CD practical.\par
+Take Screenshot 6: Successful Docker Trivy scan jobs.\par
+\par
+\b 15. Failure Behavior\b0\par
+The workflow should fail when a high-severity dependency, image, or Kubernetes finding is detected. This prevents insecure changes from being accepted silently.\par
+\par
+\b 16. Troubleshooting\b0\par
+\tab If the workflow is not visible, confirm the YAML file is pushed under \f1 .github/workflows\f0 .\par
+\tab If Docker image scanning fails, inspect the Dockerfile and Trivy output.\par
+\tab If npm audit fails, inspect the uploaded JSON artifact and update vulnerable dependencies.\par
+\tab If CodeQL fails, open the job logs and GitHub Security tab.\par
+\tab Never commit Docker Hub tokens, GitHub tokens, passwords, or Kubernetes credentials.\par
+\par
+\b 17. Result\b0\par
+A GitHub Actions DevSecOps workflow was created for TaskFlow. It scans source code, secrets, dependencies, Kubernetes manifests, and Docker images before the application proceeds to the CI/CD stage.\par
+\par
+\b 18. Conclusion\b0\par
+The security pipeline shifts security checks left into the development process. Automated scanning reduces the chance of secrets, vulnerable dependencies, insecure Kubernetes configuration, and vulnerable Docker images reaching production.\par
+}
