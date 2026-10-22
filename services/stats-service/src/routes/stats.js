@@ -2,8 +2,17 @@ import axios from 'axios';
 import express from 'express';
 import { config } from '../config.js';
 import logger from '../logger.js';
+import { createCircuitBreaker } from '../resilience/circuitBreaker.js';
 
 const router = express.Router();
+const userServiceBreaker = createCircuitBreaker(
+  'user-service',
+  (url, requestConfig) => axios.get(url, requestConfig)
+);
+const taskServiceBreaker = createCircuitBreaker(
+  'task-service',
+  (url, requestConfig) => axios.get(url, requestConfig)
+);
 
 function logDownstreamFailure(service, url, error) {
   logger.error({ service, url, err: error }, 'Downstream service failed');
@@ -27,8 +36,8 @@ router.get('/overview', async (_req, res, next) => {
     const userUrl = `${config.USER_SERVICE_URL}/api/users`;
     const taskUrl = `${config.TASK_SERVICE_URL}/api/tasks`;
     const results = await Promise.allSettled([
-      axios.get(userUrl),
-      axios.get(taskUrl)
+      userServiceBreaker.fire(userUrl),
+      taskServiceBreaker.fire(taskUrl)
     ]);
 
     const [usersResult, tasksResult] = results;
@@ -57,7 +66,7 @@ router.get('/overview', async (_req, res, next) => {
 router.get('/user/:userId', async (req, res) => {
   const url = `${config.TASK_SERVICE_URL}/api/tasks`;
   try {
-    const response = await axios.get(url, {
+    const response = await taskServiceBreaker.fire(url, {
       params: { userId: req.params.userId }
     });
     const tasks = response.data;

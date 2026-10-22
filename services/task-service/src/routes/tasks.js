@@ -3,9 +3,14 @@ import express from 'express';
 import { config } from '../config.js';
 import logger from '../logger.js';
 import Task from '../models/Task.js';
+import { createCircuitBreaker } from '../resilience/circuitBreaker.js';
 
 const router = express.Router();
 const validStatuses = ['pending', 'in-progress', 'done'];
+const userServiceBreaker = createCircuitBreaker(
+  'user-service',
+  (url, requestConfig) => axios.get(url, requestConfig)
+);
 
 router.get('/', async (req, res, next) => {
   try {
@@ -38,7 +43,7 @@ router.post('/', async (req, res, next) => {
 
   const url = `${config.USER_SERVICE_URL}/api/users/${userId}`;
   try {
-    const response = await axios.get(url, { timeout: 3000 });
+    const response = await userServiceBreaker.fire(url);
     logger.debug({ url, result: response.status }, 'user-service lookup succeeded');
   } catch (error) {
     const result = error.response?.status || error.code || 'error';
