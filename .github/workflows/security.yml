@@ -1,0 +1,141 @@
+name: DevSecOps Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan repository with Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependency-scan:
+    name: Dependency audit (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: frontend
+            path: frontend
+          - name: user-service
+            path: services/user-service
+          - name: task-service
+            path: services/task-service
+          - name: stats-service
+            path: services/stats-service
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.path }}
+        run: npm install --ignore-scripts
+
+      - name: Run npm audit
+        id: audit
+        continue-on-error: true
+        working-directory: ${{ matrix.path }}
+        run: npm audit --audit-level=high --json > npm-audit.json
+
+      - name: Upload npm audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-${{ matrix.name }}
+          path: ${{ matrix.path }}/npm-audit.json
+
+      - name: Enforce audit result
+        if: steps.audit.outcome == 'failure'
+        run: exit 1
+
+  codeql:
+    name: CodeQL JavaScript scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript
+
+      - name: Analyze with CodeQL
+        uses: github/codeql-action/analyze@v3
+
+  kubernetes-scan:
+    name: Kubernetes manifest scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Scan Kubernetes manifests with Trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: config
+          scan-ref: k8s
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
+
+  docker-scan:
+    name: Docker scan (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: frontend
+            path: frontend
+          - name: user-service
+            path: services/user-service
+          - name: task-service
+            path: services/task-service
+          - name: stats-service
+            path: services/stats-service
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build image for scanning
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.path }}
+          load: true
+          tags: taskflow-${{ matrix.name }}:${{ github.sha }}
+
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: taskflow-${{ matrix.name }}:${{ github.sha }}
+          scan-type: image
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
